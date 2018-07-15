@@ -52,8 +52,12 @@ def Entity(cls):
 
 @decorator
 def GET(func, suffix="", paginate=False):
-    def wrapper(self, *args, **kwargs):
+    def wrapper(self, *args, query=True, **kwargs):
         Type = func(self, *args, **kwargs)
+
+        if not query:
+            return Type(self.api, kwargs)
+
         the_suffix = suffix
         print("I am:", self.__class__.__name__)
         print("as", Type)
@@ -63,7 +67,7 @@ def GET(func, suffix="", paginate=False):
         for arg in args:
             url += '{}/'.format(arg)
 
-        params = dict()
+        params = {key: arg for key, arg in kwargs if arg is not None}
         params['access_token'] = self.token
 
         print(url)
@@ -75,7 +79,7 @@ def GET(func, suffix="", paginate=False):
         if paginate:
             return self.api.paginate(Type, data)
         else:
-            entity = Type(self, data)
+            entity = Type(self.api, data)
             return entity
     return wrapper
 
