@@ -1,5 +1,5 @@
 import sys
-from util import decorator
+from .util import decorator
 
 import requests
 
@@ -22,7 +22,7 @@ def API(cls, base_url):
 @decorator
 def Entity(cls):
     class E(cls):
-        def __init__(self, api, data):
+        def __init__(self, api, **data):
             self.api = api
             print(data)
             for name in dir(cls):
@@ -52,12 +52,8 @@ def Entity(cls):
 
 @decorator
 def GET(func, suffix="", paginate=False):
-    def wrapper(self, *args, query=True, **kwargs):
+    def wrapper(self, *args, **kwargs):
         Type = func(self, *args, **kwargs)
-
-        if not query:
-            return Type(self.api, kwargs)
-
         the_suffix = suffix
         print("I am:", self.__class__.__name__)
         print("as", Type)
@@ -67,7 +63,7 @@ def GET(func, suffix="", paginate=False):
         for arg in args:
             url += '{}/'.format(arg)
 
-        params = {key: arg for key, arg in kwargs if arg is not None}
+        params = {key: arg for key, arg in kwargs.items() if arg is not None}
         params['access_token'] = self.token
 
         print(url)
@@ -77,9 +73,9 @@ def GET(func, suffix="", paginate=False):
         data = r.json()
 
         if paginate:
-            return self.api.paginate(Type, data)
+            return self.api.paginate(Type, **data)
         else:
-            entity = Type(self.api, data)
+            entity = Type(self.api, **data)
             return entity
     return wrapper
 
@@ -93,8 +89,12 @@ class Property(object):
         self.required = required
 
     def parse(self, value):
-        if value is None and self.required:
-            raise RuntimeError("Missing required attribute")
+        if value is None:
+            if self.required:
+                raise RuntimeError("Missing required attribute")
+            else:
+                return
+
         return self._parse(value)
 
     def _parse(self, value):
@@ -109,24 +109,38 @@ class StringProperty(Property):
         return str(value)
 
 
-class CompoundProperty(Property):
-    def _parse(self, data):
-        for name in dir(self.__class__):
-            attr = getattr(self.__class__, name)
-            if isinstance(attr, Property):
-                value = attr.parse(data.get(name))
-                setattr(self, name, value)
+class IntProperty(Property):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def _parse(self, value):
+        return int(value)
 
 
-class ListProperty(Property, list):
+# class CompoundProperty(Property):
+#     def _parse(self, data):
+#         for name in dir(self.__class__):
+#             attr = getattr(self.__class__, name)
+#             if isinstance(attr, Property):
+#                 value = attr.parse(data.get(name))
+#                 setattr(self, name, value)
+
+
+class ListProperty(Property):
     def __init__(self, cls, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.cls = cls
 
     def _parse(self, data):
+        elements = list()
         for elem in data:
+            instance = self.cls()
+
             for name in dir(self.cls):
                 attr = getattr(self.cls, name)
                 if isinstance(attr, Property):
-                    value = attr.parse(data.get(name))
-                    setattr(elem, name, value)
+                    value = attr.parse(elem.get(name))
+                    setattr(instance, name, value)
+
+            elements.append(instance)
+        return elements
