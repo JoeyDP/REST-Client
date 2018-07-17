@@ -1,7 +1,8 @@
 import sys
-from .util import decorator
-
+from urllib.parse import urljoin
 import requests
+
+from .util import decorator
 
 
 @decorator
@@ -24,7 +25,7 @@ def Entity(cls):
     class E(cls):
         def __init__(self, api, **data):
             self.api = api
-            print(data)
+            # print(data)
             for name in dir(cls):
                 attr = getattr(cls, name)
                 if isinstance(attr, Property):
@@ -55,23 +56,24 @@ def GET(func, suffix="", paginate=False):
     def wrapper(self, *args, **kwargs):
         Type = func(self, *args, **kwargs)
         the_suffix = suffix
-        print("I am:", self.__class__.__name__)
-        print("as", Type)
 
-        # TODO: use urlib join method
-        url = self.base_url + self.suffix + '/' + the_suffix
+        url = urljoin(self.base_url, self.suffix)
+        url = urljoin(url, the_suffix)
         for arg in args:
-            url += '{}/'.format(arg)
+            url = urljoin(url, arg)
 
         params = {key: arg for key, arg in kwargs.items() if arg is not None}
         params['access_token'] = self.token
 
-        print(url)
+        # print(url)
 
         r = requests.get(url, params=params)
-        print(r)
-        data = r.json()
+        if not r.ok:
+            print(r.text)
+            print("Request failed")
+            return None
 
+        data = r.json()
         if paginate:
             return self.api.paginate(Type, **data)
         else:
