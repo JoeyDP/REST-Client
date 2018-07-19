@@ -20,6 +20,49 @@ def API(cls, base_url):
     return A
 
 
+class RequestPage(object):
+    def __init__(self, response):
+        self.response = response
+
+    @property
+    def data(self):
+        return self.response.json()
+
+    @property
+    def items(self):
+        return self.data.get('data', list())
+
+    @property
+    def itemCount(self):
+        return None
+
+    def getNextUrl(self):
+        """ Return next url or raise StopIteration if end """
+        raise NotImplementedError()
+
+
+class Paginator(object):
+    def __init__(self, page):
+        self.page = page
+        self.itemCount = self.page.itemCount
+
+    def fetchNext(self):
+        response = makeRequest(self.page.getNextUrl())
+        if not response.ok:
+            print("Request failed")
+            print(response.text)
+            raise StopIteration
+        self.page = self.page.__class__(response)
+
+    def __iter__(self):
+        while True:
+            yield self.page
+            self.fetchNext()
+
+    def __len__(self):
+        return self.itemCount
+
+
 @decorator
 def Entity(cls):
     class E(cls):
@@ -38,7 +81,7 @@ def Entity(cls):
 
         @property
         def suffix(self):
-            return str(self.id)
+            return str(self.id) + '/'
 
         @property
         def base_url(self):
@@ -49,6 +92,11 @@ def Entity(cls):
             return self.api.token
 
     return E
+
+
+def makeRequest(url, *args, **kwargs):
+    r = requests.get(url, *args, **kwargs)
+    return r
 
 
 @decorator
@@ -67,15 +115,15 @@ def GET(func, suffix="", paginate=False):
 
         # print(url)
 
-        r = requests.get(url, params=params)
+        r = makeRequest(url, params=params)
         if not r.ok:
-            print(r.text)
             print("Request failed")
+            print(r.text)
             return None
 
         data = r.json()
         if paginate:
-            return self.api.paginate(Type, **data)
+            return self.api.paginate(Type, r)
         else:
             entity = Type(self.api, **data)
             return entity
