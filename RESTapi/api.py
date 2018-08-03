@@ -118,13 +118,14 @@ def GET(func, suffix="", paginate=False):
         r = makeRequest(url, params=params)
         if not r.ok:
             print("Request failed")
+            print("status", str(r.status_code))
             print(r.text)
-            return None
+            raise RequestException(r)
 
-        data = r.json()
         if paginate:
             return self.api.paginate(Type, r)
         else:
+            data = r.json()
             entity = Type(self.api, **data)
             return entity
     return wrapper
@@ -132,6 +133,12 @@ def GET(func, suffix="", paginate=False):
 
 def POST(f):
     pass
+
+
+class RequestException(Exception):
+    def __init__(self, request):
+        super().__init__()
+        self.request = request
 
 
 class Property(object):
